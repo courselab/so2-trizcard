@@ -1,0 +1,8 @@
+1. Compare 'hw.bin' with 'eg.bin'. Do the outputs match? (They don't necessarily have too).
+     Not completely, at the end of the file there are some differences
+
+2. Disassemble 'hw.bin' and compare the result with 'hw.S'. Does the output (at least approximately) matches 'hw.S'? 
+     Yes, it's simmilar, except for the end
+
+3. 
+
