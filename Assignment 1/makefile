@@ -20,7 +20,7 @@ clean:
 
 # Generic rule for assembling .S files to .bin
 %.bin: %.S
-	./$(TARGET) $<
+	./$(TARGET) $< $@
 
 
 .PHONY: clean all

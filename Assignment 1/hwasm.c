@@ -1,225 +1,190 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <ctype.h> // For isspace()
 
-#define MAX_INSTRUCTION_LENGTH 256
-#define MAX_LABELS 128
+#define BUFFER_SIZE 512
 
-// Function to replace the file extension
-void replace_extension(char *filename, const char *new_extension)
-{
-     char *dot = strrchr(filename, '.');
-     if (dot)
-     {
-          *(dot + 1) = '\0';               // Remove existing extension
-          strcat(filename, new_extension); // Add new extension
-     }
-     else
-     {
-          strcat(filename, new_extension);
-     }
-}
-
-// Simple function to write bytes to a file
-void write_bytes(FILE *fp, const unsigned char *bytes, size_t num_bytes)
-{
-     fwrite(bytes, 1, num_bytes, fp);
-}
-
+// Estrutura para uma instrução assembly
 typedef struct
 {
-     char label[256];
-     int address;
-} Label;
+     char *instr;
+     char *operand1;
+     char *operand2;
+} AssemblyInstruction;
 
-Label labelTable[MAX_LABELS];
-int labelCount = 0;
-
-void addLabel(const char *label, int address)
+int find_start(char *str)
 {
-     if (labelCount < MAX_LABELS)
+     int start = 0;
+     while (str[start] != '\0' && isspace((unsigned char)str[start]))
      {
-          strcpy(labelTable[labelCount].label, label);
-          labelTable[labelCount].address = address;
-          labelCount++;
+          start++;
      }
+     return start;
 }
 
-Label findLabelAddress(const char *label)
+// Function to trim trailing spaces
+int find_end(char *str)
 {
-     for (int i = 0; i < labelCount; i++)
+     int end = strlen(str) - 1;
+     while (end >= 0)
      {
-          if (strstr(labelTable[i].label, label) != NULL)
-          {
-               return labelTable[i];
+          if (str[end]=='#'){
+               end--;
+               break;
           }
+          end--;
      }
-     Label notFound;
-     notFound.address = -1;
-     return notFound; // Label not found
+     if (end < 0)
+     {
+          end = strlen(str) - 1;
+     }
+     while (end >= 0 && isspace((unsigned char)str[end]))
+     {
+          end--;
+     }
+     
+     return end;
 }
 
-// Encode and write MOV, INT, HLT, and JMP instructions
-void encode_and_write_instruction(FILE *fp, const char *instruction, const char *operand, int currentAddress)
+// Main trim function
+void trim_string(char *str)
 {
-     if (strcmp(instruction, "movb") == 0 && operand[3] == 'e')
-     {
-          unsigned char opcode[] = {0xB4, 0x0E}; // movb $0x0E, %ah
-          write_bytes(fp, opcode, sizeof(opcode));
-     }
-     else if (strcmp(instruction, "movb") == 0)
-     {
-          unsigned char opcode[] = {0xB0, (unsigned char)strtol(operand + 1, NULL, 0)}; // movb $val, %al
-          write_bytes(fp, opcode, sizeof(opcode));
-     }
-     else if (strcmp(instruction, "int") == 0)
-     {
-          unsigned char opcode[] = {0xCD, 0x10}; // int $0x10
-          write_bytes(fp, opcode, sizeof(opcode));
-     }
-     else if (strcmp(instruction, "hlt") == 0)
-     {
-          unsigned char opcode[] = {0xF4}; // hlt
-          write_bytes(fp, opcode, sizeof(opcode));
-     }
-     else if (strcmp(instruction, "jmp") == 0)
-     {
-          Label labelResp = findLabelAddress(operand);
-          printf("Label: %s, Address: %d\n", labelResp.label, labelResp.address);
-          if (labelResp.address == -1)
-          {
-               fprintf(stderr, "Label '%s' not found\n", operand);
-               return;
-          }
-          int offset = labelResp.address - currentAddress + strlen(labelResp.label) + 1; // for the size of the jmp instruction itself
-          unsigned char opcode[] = {0xEB, (unsigned char)(offset & 0xFF)};
-          write_bytes(fp, opcode, sizeof(opcode));
+     int start, end, i;
+
+     start = find_start(str);
+     end = find_end(str);
+
+     if (start > end)
+     {                   // String is all spaces
+          str[0] = '\0'; // Make the string empty
      }
      else
      {
-          addLabel(instruction, currentAddress);
-     }
-}
-
-// Handle .fill directive
-void handle_fill(FILE *fp, int count, int size, int value)
-{
-     unsigned char byte = value;
-     for (int i = 0; i < count * size; i++)
-     {
-          write_bytes(fp, &byte, 1);
-     }
-}
-
-// Handle .word directive
-void handle_word(FILE *fp, int word)
-{
-     unsigned char bytes[2] = {word & 0xFF, (word >> 8) & 0xFF};
-     write_bytes(fp, bytes, 2);
-}
-
-void parseAndHandleDirective(FILE *fp, const char *directive, const char *params)
-{
-     if (strcmp(directive, ".word") == 0)
-     {
-          unsigned char opcode[] = {0xB0, (unsigned char)strtol(params + 1, NULL, 0)};
-          write_bytes(fp, opcode, sizeof(opcode));
-          printf("Word: %s\n", opcode);
-     }
-     else if (strcmp(directive, ".fill") == 0)
-     {
-          int repeat, size, value;
-          sscanf(params, "%d, %d, %d", &repeat, &size, &value);
-          for (int i = 0; i < repeat; i++)
+          for (i = 0; start <= end; start++, i++)
           {
-               for (int j = 0; j < size; j++)
-               {
-                    write_bytes(fp, (const unsigned char *)&value, sizeof(char));
-               }
+               str[i] = str[start];
           }
-          printf("Fill: %d, %d, %d\n", repeat, size, value);
-     }
-     else
-     {
-          fprintf(stderr, "Unknown directive: %s\n", directive);
+          str[i] = '\0'; // Terminate string properly
      }
 }
 
-// Function to trim leading spaces
-const char *trimLeadingSpaces(const char *str)
-{
-     while (isspace((unsigned char)*str))
-          str++;
-     return str;
-}
+// Protótipos das funções
+void assemble(FILE *input, FILE *output);
+void write_instruction(FILE *output, AssemblyInstruction *instruction);
+void finalize_binary(FILE *output);
 
 int main(int argc, char *argv[])
 {
-     if (argc != 2)
+     if (argc != 3)
      {
-          fprintf(stderr, "Usage: %s <source.S>\n", argv[0]);
-          return EXIT_FAILURE;
+          printf("Usage: %s <input.S> <output.bin>\n", argv[0]);
+          return 1;
      }
 
-     char output_filename[256];
-     strncpy(output_filename, argv[1], sizeof(output_filename));
-     output_filename[sizeof(output_filename) - 1] = '\0'; // Ensure null termination
-
-     // Change the extension from .S to .bin
-     replace_extension(output_filename, "bin");
-
-     FILE *fp = fopen(output_filename, "wb");
-     if (!fp)
+     FILE *input = fopen(argv[1], "r");
+     if (!input)
      {
-          perror("Failed to open file for writing");
-          return EXIT_FAILURE;
+          perror("Error opening input file");
+          return 1;
      }
 
-     // Open the input file
-     FILE *source = fopen(argv[1], "r");
-     if (!source)
+     FILE *output = fopen(argv[2], "wb");
+     if (!output)
      {
-          perror("Failed to open source file");
-          fclose(fp);
-          return EXIT_FAILURE;
+          perror("Error opening output file");
+          fclose(input);
+          return 1;
      }
 
-     int currentAddress = 0; // Inicialização de currentAddress
-     char line[MAX_INSTRUCTION_LENGTH];
-     while (fgets(line, MAX_INSTRUCTION_LENGTH, source) != NULL)
+     assemble(input, output);
+
+     fclose(input);
+     fclose(output);
+     return 0;
+}
+
+void assemble(FILE *input, FILE *output)
+{
+     char line[256];
+     while (fgets(line, sizeof(line), input))
      {
-          char *token = strtok(line, " \t\n");
-          const char *trimmed = trimLeadingSpaces(line);
-          if (token && trimmed[0] == '.')
-          {
-               printf("Directive: %s\n", token);
-               char *directive = token;
-               char operand[10] = {0};
-               if (token != NULL)
-               {
-                    strcpy(operand, token); // Assuming operand is next token
-               }
-               parseAndHandleDirective(fp, directive, operand);
+          AssemblyInstruction inst;
+          char *token = strtok(line, " ,\t\n");
+          
+          if (!token)
+               continue;
+
+          inst.instr = token;
+          inst.operand1 = strtok(NULL, ",");
+          inst.operand2 = strtok(NULL, " \t");
+
+          // Remove leading spaces
+          trim_string(inst.instr);
+          if (inst.operand1)
+               trim_string(inst.operand1);
+          if (inst.operand2)
+               trim_string(inst.operand2);
+
+          write_instruction(output, &inst);
+     }
+
+     finalize_binary(output);
+}
+
+void write_instruction(FILE *output, AssemblyInstruction *instruction)
+{
+     if (strcmp(instruction->instr, "movb") == 0)
+     {
+          if (strcmp(instruction->operand2, "\%ah") == 0){
+               fputc(0xB4, output); // Opcode for movb to ah
+          } else{
+          fputc(0xB0, output); // Opcode for movb, assumes that it is always movb to al
           }
-          else if (token)
-          {
-               char instruction[MAX_INSTRUCTION_LENGTH];
-               char operand[10] = {0};
-               strcpy(instruction, token);
-               token = strtok(NULL, " ,\t\n");
-               if (token != NULL)
-               {
-                    strcpy(operand, token); // Assuming operand is next token
-               }
-               encode_and_write_instruction(fp, instruction, operand, currentAddress);
+          // Convert the second operand which should be an immediate value
+          if (instruction->operand1[2] == 'x')
+          { // Check if it's a hex value
+               fputc((unsigned char)strtol(instruction->operand1 + 1, NULL, 0), output);
           }
-          currentAddress += strlen(line);
+          else
+          {
+               fputc(atoi(instruction->operand1), output); // Direct integer value
+          }
+     }
+     else if (strcmp(instruction->instr, "int") == 0)
+     {
+          fputc(0xCD, output); // Opcode for int
+          if (instruction->operand1[2] == 'x')
+          {
+               fputc((unsigned char)strtol(instruction->operand1 + 1, NULL, 0), output);
+          }
+          else
+          {
+               fputc(atoi(instruction->operand1), output);
+          }
+     }
+     else if (strcmp(instruction->instr, "hlt") == 0)
+     {
+          fputc(0xF4, output); // Opcode for hlt
+     }
+     else if (strcmp(instruction->instr, "jmp") == 0)
+     {
+          fputc(0xEB, output);                                      // Opcode for jmp short
+          int offset = strtol(instruction->operand1, NULL, 16) - 3; // Calculate relative address
+          fputc(offset, output);                                    // Write relative address
+     }
+}
+
+void finalize_binary(FILE *output)
+{
+     // Preenche até 510 bytes com zeros
+     long size = ftell(output);
+     for (int i = size; i < 510; i++)
+     {
+          fputc(0, output);
      }
 
-     fclose(source);
-     fclose(fp);
-
-     printf("Assembled %s successfully to %s\n", argv[1], output_filename);
-     return EXIT_SUCCESS;
+     // Escreve o magic number do bootsector
+     fputc(0x55, output);
+     fputc(0xAA, output);
 }
