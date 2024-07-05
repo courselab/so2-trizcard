@@ -45,7 +45,7 @@ void shell()
 {
   int i;
   clear();
-  kwrite ("TinyDOS 1.0\n");
+  kwrite ("hbOS 1.0\n");
 
   while (go_on)
     {
@@ -91,10 +91,14 @@ struct cmd_t cmds[] =
   {
     {"help",    f_help},     /* Print a help message.       */
     {"quit",    f_quit},     /* Exit TyDOS.                 */
+    {"list",    f_list},     /* List all files in the disk. */
     {"exec",    f_exec},     /* Execute an example program. */
     {0, 0}
   };
 
+struct fsHeader *get_fsHeader() {
+  return (struct fsHeader *)0x7c00;
+}
 
 /* Build-in shell command: help. */
 
@@ -102,8 +106,9 @@ void f_help()
 {
   kwrite ("...me, Obi-Wan, you're my only hope!\n\n");
   kwrite ("   But we can try also some commands:\n");
+  kwrite ("      list    (to list all the files in hbOS)\n");
   kwrite ("      exec    (to execute an user program example\n");
-  kwrite ("      quit    (to exit TyDOS)\n");
+  kwrite ("      quit    (to exit hbOS)\n");
 }
 
 void f_quit()
@@ -126,9 +131,87 @@ void f_quit()
 
   */
 
-extern int main();
-void f_exec()
-{
-  main();			/* Call the user program's 'main' function. */
+
+void load_disk_into_memory(int sector_coordinate, int sectors_to_read, void *target_addres) {
+  __asm__ volatile(
+      "pusha \n"
+      "mov boot_drive, %%dl \n"    /* Select the boot drive (from rt0.o). */
+      "mov $0x2, %%ah \n"          /* BIOS disk service: op. read sector. */
+      "mov %[sectToRead], %%al \n" /* How many sectors to read          */
+      "mov $0x0, %%ch \n"          /* Cylinder coordinate (starts at 0).  */
+      "mov %[sectCoord], %%cl \n"  /* Sector coordinate   (starts at 1).  */
+      "mov $0x0, %%dh \n"          /* Head coordinate     (starts at 0).      */
+      "mov %[targetAddr], %%bx \n" /* Where to load the file system (rt0.o).   */
+      "int $0x13 \n"               /* Call BIOS disk service 0x13.        */
+      "popa \n" ::
+          [sectCoord] "g"(sector_coordinate),
+      [sectToRead] "g"(sectors_to_read),
+      [targetAddr] "g"(target_addres));
+}
+
+void f_list() {
+  struct fsHeader *fs_header = get_fsHeader();
+
+  // finds sector coordinate of the directory and how many sectors to read
+  int sector_coordinate = 1 + fs_header->bootSectors; 
+  int sectors_to_read = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE; 
+
+  extern byte _MEM_POOL;
+  void *directory_section = (void *)&_MEM_POOL;
+
+  load_disk_into_memory(sector_coordinate, sectors_to_read, directory_section);
+
+  for (int i = 0; i < fs_header->fileEntries; i++) {
+    char *file_name = directory_section + i * DIR_ENTRY_LEN;
+    if (file_name[0]) {
+      kwrite(file_name);
+      kwrite("\n");
+    }
+  }
+}
+
+void f_exec() {
+  char *binary_file_name = "prog.bin";
+
+  // find the binary file in the directory
+  struct fsHeader *fs_header = get_fsHeader();
+
+  int directory_sector_coordinate = 1 + fs_header->bootSectors;
+  int sectors_to_read = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE + 1;
+
+  int memoryOffset = fs_header->fileEntries * DIR_ENTRY_LEN - (sectors_to_read - 1) * 512;
+
+  extern byte _MEM_POOL;
+  void *directory_section = (void *)&_MEM_POOL;
+
+  load_disk_into_memory(directory_sector_coordinate, sectors_to_read, directory_section);
+
+  int bin_sector_coordinate;
+  for (int i = 0; i < fs_header->fileEntries; i++) {
+    char *file_name = directory_section + i * DIR_ENTRY_LEN;
+    if (!strcmp(file_name, binary_file_name)) {
+      bin_sector_coordinate = directory_sector_coordinate + sectors_to_read + fs_header->sizeMax * i - 1;
+      break;
+    }
+  }
+
+  void *program = (void *)(USER_PROGRAM_START_ADDR);
+  void *program_sector_start = program - memoryOffset;
+
+  load_disk_into_memory(bin_sector_coordinate, fs_header->sizeMax, program_sector_start);
+
+  __asm__ volatile(
+      "call get_return_addr_into_ebx \n"  // coloca o return address em ebx
+
+      "push %%ebx \n"  // colocar o ebx na stack
+
+      "jmp *%[progAddr] \n"  // jump pra main
+
+      "get_return_addr_into_ebx: \n"
+      "  mov (%%esp), %%ebx \n"  // coloca o topo da stack em ebx
+      "  add $17, %%ebx \n"      // soma 17 pq são 17 bytes entre o push do ebx na stack até o retorno da f_exec
+      "  ret \n"
+
+      ::[progAddr] "r"(program));
 }
 

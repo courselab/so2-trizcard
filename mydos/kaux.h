@@ -22,6 +22,7 @@ Heitor Tanoue de Mello <heitortanoue@usp.br>
 #define RIGHT   (COLS -1)	/* Last column (right of the screen).    */
 
 extern char character_color;    /* Default fore/background char color.   */
+typedef char byte;
 
 void splash(void);		/* Draw the splash screen.               */
 void halt(void);		/* Halt the system.                       */
@@ -29,6 +30,7 @@ void halt(void);		/* Halt the system.                       */
 /* Two-byte value to be written into video RAM: color+ascii.             */
 
 #define color_char(ascii) ((character_color<<8) + ascii)
+#define USER_PROGRAM_START_ADDR 0xFE00
 
 int strcmp(const char *s1, const char *s2);
 

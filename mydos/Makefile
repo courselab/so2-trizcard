@@ -21,7 +21,7 @@
 # exercise, redefine $(dos) to reflect your own DOS name, say
 # dos = "amazingOS" 
 
-dos=$(shell basename $$(realpath .))
+dos="hbOS"
 
 # Build the OS and an example user program.
 
@@ -38,7 +38,7 @@ $(dos).bin : bootloader.o bios1.o kernel.o kaux.o bios2.o logo.o syscall.o
 # from the list of pre-requisites, and edit the linker script accordingly.
 # Comment out the following line if this is the case.
 
-$(dos).bin : prog.o libtydos.o 
+# $(dos).bin : prog.o libtydos.o 
 
 # Rules to build objects from either C or assembly code.
 
@@ -79,6 +79,16 @@ libtydos.o : tydos.h
 
 libtydos.a : libtydos.o
 	ar rcs $@ $^
+
+# Create a 1.44 MB floppy image (2880 * 512 bytes)
+
+disk.img:
+	rm -f $@
+	dd if=/dev/zero of=$@ count=2880
+
+load-dos: $(dos).bin
+	dd bs=1 if=$< of=disk.img iseek=16 oseek=16 conv=notrunc
+
 
 # Housekeeping.
 

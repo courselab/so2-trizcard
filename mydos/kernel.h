@@ -29,11 +29,31 @@ void kmain(void);
 void shell();			/* Command interpreter. */
 #define BUFF_SIZE 64		/* Max command length.  */
 #define PROMPT "> "		/* Command-line prompt. */
+#define FS_SIGLEN 4      /* Signature length.                        */
+#define DIR_ENTRY_LEN 32 /* Max file name length in bytes.           */
+#define SECTOR_SIZE 512
+
+/* The file header. */
+
+struct fsHeader {
+  unsigned char signature[FS_SIGLEN];     /* File system signature.                    */
+  unsigned short totalSectors;            /* Number of 512-byte disk blocks.           */
+  unsigned short bootSectors;             /* Sectors reserved for boot code.           */
+  unsigned short fileEntries;             /* Maximum number of files in the disk.      */
+  unsigned short sizeMax;                 /* Maximum size of a file in blocks.         */
+  unsigned int unused_space;              /* Remaining space less than sizeMax.        */
+} __attribute__((packed));                /* Disable alignment to preserve offsets.    */
+
+struct fsHeader *get_fsHeader();
+
+
+void load_disk_into_memory(int sector_coordinate, int sectors_to_read, void *target_addres);
 
 
 /* Built-in commands. */
 
 void f_help();
+void f_list();
 void f_exec();
 void f_quit();
 
