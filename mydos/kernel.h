@@ -47,7 +47,7 @@ struct fsHeader {
 struct fsHeader *get_fsHeader();
 
 
-void load_disk_into_memory(int sector_coordinate, int sectors_to_read, void *target_addres);
+void loadDisk(int sector_coordinate, int sectors_to_read, void *target_addres);
 
 
 /* Built-in commands. */

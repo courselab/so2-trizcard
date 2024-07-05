@@ -132,7 +132,7 @@ void f_quit()
   */
 
 
-void load_disk_into_memory(int sector_coordinate, int sectors_to_read, void *target_addres) {
+void loadDisk(int sector_coordinate, int   readSectors, void *target_addres) {
   __asm__ volatile(
       "pusha \n"
       "mov boot_drive, %%dl \n"    /* Select the boot drive (from rt0.o). */
@@ -145,7 +145,7 @@ void load_disk_into_memory(int sector_coordinate, int sectors_to_read, void *tar
       "int $0x13 \n"               /* Call BIOS disk service 0x13.        */
       "popa \n" ::
           [sectCoord] "g"(sector_coordinate),
-      [sectToRead] "g"(sectors_to_read),
+      [sectToRead] "g"(  readSectors),
       [targetAddr] "g"(target_addres));
 }
 
@@ -154,15 +154,15 @@ void f_list() {
 
   // finds sector coordinate of the directory and how many sectors to read
   int sector_coordinate = 1 + fs_header->bootSectors; 
-  int sectors_to_read = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE; 
+  int   readSectors = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE; 
 
   extern byte _MEM_POOL;
-  void *directory_section = (void *)&_MEM_POOL;
+  void *dirSection = (void *)&_MEM_POOL;
 
-  load_disk_into_memory(sector_coordinate, sectors_to_read, directory_section);
+  loadDisk(sector_coordinate,   readSectors, dirSection);
 
   for (int i = 0; i < fs_header->fileEntries; i++) {
-    char *file_name = directory_section + i * DIR_ENTRY_LEN;
+    char *file_name = dirSection + i * DIR_ENTRY_LEN;
     if (file_name[0]) {
       kwrite(file_name);
       kwrite("\n");
@@ -176,21 +176,21 @@ void f_exec() {
   // find the binary file in the directory
   struct fsHeader *fs_header = get_fsHeader();
 
-  int directory_sector_coordinate = 1 + fs_header->bootSectors;
-  int sectors_to_read = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE + 1;
+  int dirSectorCoord = 1 + fs_header->bootSectors;
+  int readSectors = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE + 1;
 
-  int memoryOffset = fs_header->fileEntries * DIR_ENTRY_LEN - (sectors_to_read - 1) * 512;
+  int memoryOffset = fs_header->fileEntries * DIR_ENTRY_LEN - (  readSectors - 1) * 512;
 
   extern byte _MEM_POOL;
-  void *directory_section = (void *)&_MEM_POOL;
+  void *dirSection = (void *)&_MEM_POOL;
 
-  load_disk_into_memory(directory_sector_coordinate, sectors_to_read, directory_section);
+  loadDisk(dirSectorCoord, readSectors, dirSection);
 
   int bin_sector_coordinate;
   for (int i = 0; i < fs_header->fileEntries; i++) {
-    char *file_name = directory_section + i * DIR_ENTRY_LEN;
+    char *file_name = dirSection + i * DIR_ENTRY_LEN;
     if (!strcmp(file_name, binary_file_name)) {
-      bin_sector_coordinate = directory_sector_coordinate + sectors_to_read + fs_header->sizeMax * i - 1;
+      bin_sector_coordinate =   dirSectorCoord +   readSectors + fs_header->sizeMax * i - 1;
       break;
     }
   }
@@ -198,18 +198,16 @@ void f_exec() {
   void *program = (void *)(USER_PROGRAM_START_ADDR);
   void *program_sector_start = program - memoryOffset;
 
-  load_disk_into_memory(bin_sector_coordinate, fs_header->sizeMax, program_sector_start);
+  loadDisk(bin_sector_coordinate, fs_header->sizeMax, program_sector_start);
 
   __asm__ volatile(
-      "call get_return_addr_into_ebx \n"  // coloca o return address em ebx
+      "call get_returnAddrEbx \n"  // return address in ebx
+      "push %%ebx \n"                     // ebx in the stack
+      "jmp *%[progAddr] \n"               // jump to main
 
-      "push %%ebx \n"  // colocar o ebx na stack
-
-      "jmp *%[progAddr] \n"  // jump pra main
-
-      "get_return_addr_into_ebx: \n"
-      "  mov (%%esp), %%ebx \n"  // coloca o topo da stack em ebx
-      "  add $17, %%ebx \n"      // soma 17 pq são 17 bytes entre o push do ebx na stack até o retorno da f_exec
+      "get_returnAddrEbx: \n"
+      "  mov (%%esp), %%ebx \n"           // puts ebx in the stack
+      "  add $17, %%ebx \n"               // 17 between the push and the return
       "  ret \n"
 
       ::[progAddr] "r"(program));
