@@ -1,7 +1,7 @@
 /*
- *    SPDX-FileCopyrightText: 2024 Beatriz Cardoso de Oliveira <beatrizco@usp.br>
-Heitor Tanoue de Mello <heitortanoue@usp.br>
  *    SPDX-FileCopyrightText: 2024 Monaco F. J. <monaco@usp.br>
+ *    SSPDX-FileCopyrightText: 2024 Beatriz Cardoso de Oliveira <beatrizco@usp.br>
+Heitor Tanoue de Mello <heitortanoue@usp.br>
  *   
  *    SPDX-License-Identifier: GPL-3.0-or-later
  *
