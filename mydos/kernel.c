@@ -24,7 +24,6 @@ Heitor Tanoue de Mello <heitortanoue@usp.br>
 
 void kmain(void)
 {
-  int i, j;
   
   register_syscall_handler();	/* Register syscall handler at int 0x21.*/
 
@@ -132,7 +131,7 @@ void f_quit()
   */
 
 
-void loadDisk(int sector_coordinate, int   readSectors, void *target_addres) {
+void loadDisk(int sector_coordinate, int readSectors, void *target_addres) {
   __asm__ volatile(
       "pusha \n"
       "mov boot_drive, %%dl \n"    /* Select the boot drive (from rt0.o). */
@@ -145,7 +144,7 @@ void loadDisk(int sector_coordinate, int   readSectors, void *target_addres) {
       "int $0x13 \n"               /* Call BIOS disk service 0x13.        */
       "popa \n" ::
           [sectCoord] "g"(sector_coordinate),
-      [sectToRead] "g"(  readSectors),
+      [sectToRead] "g"(readSectors),
       [targetAddr] "g"(target_addres));
 }
 
@@ -159,7 +158,7 @@ void f_list() {
   extern byte _MEM_POOL;
   void *dirSection = (void *)&_MEM_POOL;
 
-  loadDisk(sector_coordinate,   readSectors, dirSection);
+  loadDisk(sector_coordinate, readSectors, dirSection);
 
   for (int i = 0; i < fs_header->fileEntries; i++) {
     char *file_name = dirSection + i * DIR_ENTRY_LEN;
@@ -179,18 +178,18 @@ void f_exec() {
   int dirSectorCoord = 1 + fs_header->bootSectors;
   int readSectors = fs_header->fileEntries * DIR_ENTRY_LEN / SECTOR_SIZE + 1;
 
-  int memoryOffset = fs_header->fileEntries * DIR_ENTRY_LEN - (  readSectors - 1) * 512;
+  int memoryOffset = fs_header->fileEntries * DIR_ENTRY_LEN - (readSectors - 1) * 512;
 
   extern byte _MEM_POOL;
   void *dirSection = (void *)&_MEM_POOL;
 
   loadDisk(dirSectorCoord, readSectors, dirSection);
 
-  int bin_sector_coordinate;
+  int binSectorCoord;
   for (int i = 0; i < fs_header->fileEntries; i++) {
     char *file_name = dirSection + i * DIR_ENTRY_LEN;
     if (!strcmp(file_name, binary_file_name)) {
-      bin_sector_coordinate =   dirSectorCoord +   readSectors + fs_header->sizeMax * i - 1;
+      binSectorCoord = dirSectorCoord + readSectors + fs_header->sizeMax * i - 1;
       break;
     }
   }
@@ -198,10 +197,10 @@ void f_exec() {
   void *program = (void *)(USER_PROGRAM_START_ADDR);
   void *program_sector_start = program - memoryOffset;
 
-  loadDisk(bin_sector_coordinate, fs_header->sizeMax, program_sector_start);
+  loadDisk(binSectorCoord, fs_header->sizeMax, program_sector_start);
 
   __asm__ volatile(
-      "call get_returnAddrEbx \n"  // return address in ebx
+      "call get_returnAddrEbx \n"         // return address in ebx
       "push %%ebx \n"                     // ebx in the stack
       "jmp *%[progAddr] \n"               // jump to main
 
